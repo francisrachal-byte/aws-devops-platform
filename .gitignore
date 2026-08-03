@@ -1,0 +1,29 @@
+# Terraform working directories
+**/.terraform/
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+
+# Terraform variable values
+*.tfvars
+!*.tfvars.example
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# AWS
+.aws/
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
