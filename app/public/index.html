@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
+    <meta
+      name="description"
+      content="Operational dashboard for the AWS DevOps Platform."
+    />
+
+    <title>Platform Pulse | AWS DevOps Platform</title>
+
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+
+  <body>
+    <div class="background-grid"></div>
+    <div class="background-glow background-glow-one"></div>
+    <div class="background-glow background-glow-two"></div>
+
+    <main class="dashboard">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+
+          <div>
+            <p class="eyebrow">AWS DEVOPS PLATFORM</p>
+            <h1>Platform Pulse</h1>
+          </div>
+        </div>
+
+        <div id="healthBadge" class="health-badge checking">
+          <span class="health-dot"></span>
+          <span id="healthText">Checking</span>
+        </div>
+      </header>
+
+      <section class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">LIVE DEPLOYMENT STATUS</p>
+
+          <h2>
+            Infrastructure, delivery,
+            <span>and runtime visibility.</span>
+          </h2>
+
+          <p class="hero-description">
+            A production-style application deployed through Terraform,
+            Docker, Amazon ECR, Kubernetes, and GitHub Actions.
+          </p>
+
+          <div class="hero-actions">
+            <button id="refreshButton" class="primary-button" type="button">
+              Refresh telemetry
+            </button>
+
+            <p id="lastUpdated" class="last-updated">
+              Waiting for application data
+            </p>
+          </div>
+        </div>
+
+        <div class="orb-container" aria-hidden="true">
+          <div class="status-orb">
+            <div class="orb-ring orb-ring-one"></div>
+            <div class="orb-ring orb-ring-two"></div>
+            <div class="orb-core">
+              <span>LIVE</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Platform information">
+        <article class="metric-card panel">
+          <p class="metric-label">Environment</p>
+          <p id="environment" class="metric-value">—</p>
+          <p class="metric-detail">Deployment stage</p>
+        </article>
+
+        <article class="metric-card panel">
+          <p class="metric-label">Version</p>
+          <p id="version" class="metric-value">—</p>
+          <p class="metric-detail">Application release</p>
+        </article>
+
+        <article class="metric-card panel">
+          <p class="metric-label">AWS Region</p>
+          <p id="awsRegion" class="metric-value">—</p>
+          <p class="metric-detail">Infrastructure location</p>
+        </article>
+
+        <article class="metric-card panel">
+          <p class="metric-label">Uptime</p>
+          <p id="uptime" class="metric-value">—</p>
+          <p class="metric-detail">Current container</p>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel deployment-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">DELIVERY WORKFLOW</p>
+              <h2>Deployment pipeline</h2>
+            </div>
+
+            <span class="pipeline-label">Automated</span>
+          </div>
+
+          <div class="pipeline">
+            <div class="pipeline-stage complete">
+              <span class="stage-number">01</span>
+              <strong>Source</strong>
+              <small>GitHub</small>
+            </div>
+
+            <div class="pipeline-connector">
+              <span></span>
+            </div>
+
+            <div class="pipeline-stage complete">
+              <span class="stage-number">02</span>
+              <strong>Build</strong>
+              <small>Docker</small>
+            </div>
+
+            <div class="pipeline-connector">
+              <span></span>
+            </div>
+
+            <div class="pipeline-stage active">
+              <span class="stage-number">03</span>
+              <strong>Registry</strong>
+              <small>Amazon ECR</small>
+            </div>
+
+            <div class="pipeline-connector">
+              <span></span>
+            </div>
+
+            <div class="pipeline-stage pending">
+              <span class="stage-number">04</span>
+              <strong>Deploy</strong>
+              <small>Amazon EKS</small>
+            </div>
+
+            <div class="pipeline-connector">
+              <span></span>
+            </div>
+
+            <div class="pipeline-stage pending">
+              <span class="stage-number">05</span>
+              <strong>Observe</strong>
+              <small>CloudWatch</small>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel runtime-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">RUNTIME DETAILS</p>
+              <h2>Active instance</h2>
+            </div>
+          </div>
+
+          <dl class="runtime-list">
+            <div>
+              <dt>Service</dt>
+              <dd id="serviceName">—</dd>
+            </div>
+
+            <div>
+              <dt>Git commit</dt>
+              <dd id="gitCommit">—</dd>
+            </div>
+
+            <div>
+              <dt>Hostname</dt>
+              <dd id="hostname">—</dd>
+            </div>
+
+            <div>
+              <dt>Node runtime</dt>
+              <dd id="nodeVersion">—</dd>
+            </div>
+
+            <div>
+              <dt>Memory</dt>
+              <dd id="memoryUsage">—</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <footer>
+        <p>
+          Built as part of the
+          <strong>aws-devops-platform</strong>
+          portfolio project.
+        </p>
+
+        <p id="footerTimestamp">Telemetry not loaded</p>
+      </footer>
+    </main>
+  </body>
+</html>
