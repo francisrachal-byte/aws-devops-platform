@@ -1,0 +1,165 @@
+name: Platform Pulse CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "docker/**"
+      - ".dockerignore"
+      - ".github/workflows/build-push-ecr.yml"
+
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "docker/**"
+      - ".dockerignore"
+      - ".github/workflows/build-push-ecr.yml"
+
+  workflow_dispatch:
+
+concurrency:
+  group: platform-pulse-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "856898221075"
+  ECR_REPOSITORY: aws-devops-platform-dev
+  AWS_ROLE_ARN: arn:aws:iam::856898221075:role/aws-devops-platform-dev-github-actions
+
+jobs:
+  test:
+    name: Test Platform Pulse
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install application dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Run endpoint smoke tests
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm start > platform-pulse.log 2>&1 &
+          APP_PID=$!
+
+          cleanup() {
+            kill "$APP_PID" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3000/health > /dev/null; then
+              break
+            fi
+
+            if [ "$attempt" -eq 20 ]; then
+              echo "Platform Pulse did not become healthy."
+              cat platform-pulse.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          HEALTH_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/health)
+          READY_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/ready)
+          INFO_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/api/info)
+
+          echo "$HEALTH_RESPONSE" | grep --quiet '"status":"healthy"'
+          echo "$READY_RESPONSE" | grep --quiet '"status":"ready"'
+          echo "$INFO_RESPONSE" | grep --quiet '"service":"aws-devops-platform"'
+
+          kill "$APP_PID"
+          wait "$APP_PID"
+
+          trap - EXIT
+
+          grep --quiet '"event":"shutdown_complete"' platform-pulse.log
+
+          echo "Platform Pulse endpoint tests passed."
+
+  publish:
+    name: Build and publish image
+    needs:
+      - test
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: platform-pulse-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
+
+      - name: Confirm assumed AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push Platform Pulse
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+          labels: |
+            org.opencontainers.image.title=Platform Pulse
+            org.opencontainers.image.description=AWS DevOps Platform operations dashboard
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Add image to workflow summary
+        shell: bash
+        run: |
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+
+          echo "## Platform Pulse image published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
