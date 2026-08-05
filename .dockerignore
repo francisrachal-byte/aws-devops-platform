@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Local dependencies
+**/node_modules/
+npm-debug.log*
+*.log
+
+# Terraform
+Terraform/
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+!**/*.tfvars.example
+
+# Other project areas not needed in the image
+kubernetes/
+docs/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.vscode/
+
+# Documentation
+README.md
+LICENSE*
