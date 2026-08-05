@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -92,8 +92,8 @@ jobs:
           echo "$READY_RESPONSE" | grep --quiet '"status":"ready"'
           echo "$INFO_RESPONSE" | grep --quiet '"service":"aws-devops-platform"'
 
-          kill "$APP_PID"
-          wait "$APP_PID"
+          kill "$APP_PID" 2>/dev/null || true
+          wait "$APP_PID" || true       
 
           trap - EXIT
 
@@ -117,7 +117,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
 
       - name: Configure temporary AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
