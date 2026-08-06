@@ -59,19 +59,28 @@ jobs:
         working-directory: app
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
 
-          npm start > platform-pulse.log 2>&1 &
+          node server.js > platform-pulse.log 2>&1 &
           APP_PID=$!
 
           cleanup() {
-            kill "$APP_PID" 2>/dev/null || true
+            if kill -0 "$APP_PID" 2>/dev/null; then
+              kill -TERM "$APP_PID" 2>/dev/null || true
+              wait "$APP_PID" 2>/dev/null || true
+            fi
           }
 
           trap cleanup EXIT
 
+          echo "Waiting for Platform Pulse to become healthy..."
+
           for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:3000/health > /dev/null; then
+            if curl \
+              --fail \
+              --silent \
+              http://127.0.0.1:3000/health > /dev/null; then
+              echo "Platform Pulse is healthy."
               break
             fi
 
@@ -84,22 +93,49 @@ jobs:
             sleep 1
           done
 
-          HEALTH_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/health)
-          READY_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/ready)
-          INFO_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/api/info)
+          HEALTH_RESPONSE=$(
+            curl --fail --silent http://127.0.0.1:3000/health
+          )
 
-          echo "$HEALTH_RESPONSE" | grep --quiet '"status":"healthy"'
-          echo "$READY_RESPONSE" | grep --quiet '"status":"ready"'
-          echo "$INFO_RESPONSE" | grep --quiet '"service":"aws-devops-platform"'
+          READY_RESPONSE=$(
+            curl --fail --silent http://127.0.0.1:3000/ready
+          )
 
-          kill "$APP_PID" 2>/dev/null || true
-          wait "$APP_PID" || true       
+          INFO_RESPONSE=$(
+            curl --fail --silent http://127.0.0.1:3000/api/info
+          )
+
+          echo "$HEALTH_RESPONSE" |
+            grep --quiet '"status":"healthy"'
+
+          echo "$READY_RESPONSE" |
+            grep --quiet '"status":"ready"'
+
+          echo "$INFO_RESPONSE" |
+            grep --quiet '"service":"aws-devops-platform"'
+
+          echo "Endpoint responses passed."
+
+          kill -TERM "$APP_PID"
+
+          if ! wait "$APP_PID"; then
+            echo "Platform Pulse did not shut down cleanly."
+            cat platform-pulse.log
+            exit 1
+          fi
 
           trap - EXIT
 
-          grep --quiet '"event":"shutdown_complete"' platform-pulse.log
+          if ! grep --quiet \
+            '"event":"shutdown_complete"' \
+            platform-pulse.log; then
+            echo "Graceful shutdown log was not found."
+            cat platform-pulse.log
+            exit 1
+          fi
 
-          echo "Platform Pulse endpoint tests passed."
+          echo "Graceful shutdown passed."
+          echo "Platform Pulse smoke tests passed."
 
   publish:
     name: Build and publish image
@@ -145,10 +181,8 @@ jobs:
           file: ./docker/Dockerfile
           platforms: linux/amd64
           push: true
-
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-
           labels: |
             org.opencontainers.image.title=Platform Pulse
             org.opencontainers.image.description=AWS DevOps Platform operations dashboard
