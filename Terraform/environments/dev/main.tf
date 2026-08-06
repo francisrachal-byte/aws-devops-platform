@@ -25,3 +25,37 @@ module "iam" {
 
   create_github_oidc_provider = false
 }
+module "eks" {
+  count = var.enable_eks ? 1 : 0
+
+  source = "../../modules/eks"
+
+  project_name = var.project_name
+  environment  = var.environment
+
+  vpc_id = module.vpc.vpc_id
+
+  cluster_subnet_ids = module.vpc.private_subnet_ids
+  node_subnet_ids    = module.vpc.public_subnet_ids
+
+  public_access_cidrs = var.eks_public_access_cidrs
+
+  node_instance_types = [
+    "t3.small"
+  ]
+
+  node_capacity_type = "ON_DEMAND"
+
+  node_desired_size = 1
+  node_min_size     = 1
+  node_max_size     = 2
+
+  node_labels = {
+    workload    = "platform-pulse"
+    environment = var.environment
+  }
+
+  tags = {
+    Application = "platform-pulse"
+  }
+}

@@ -25,3 +25,14 @@ variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets"
   type        = list(string)
 }
+variable "enable_eks" {
+  description = "Whether to create the EKS cluster and managed node group"
+  type        = bool
+  default     = false
+}
+
+variable "eks_public_access_cidrs" {
+  description = "CIDR ranges allowed to access the public EKS API endpoint"
+  type        = list(string)
+  default     = []
+}
