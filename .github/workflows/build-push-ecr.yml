@@ -42,41 +42,48 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Install application dependencies
+      - name: Install dependencies
         working-directory: app
         run: npm ci
 
-      - name: Run endpoint smoke tests
+      - name: Start application and test endpoints
         working-directory: app
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
 
           node server.js > platform-pulse.log 2>&1 &
           APP_PID=$!
 
           cleanup() {
-            kill "$APP_PID" 2>/dev/null || true
+            if kill -0 "$APP_PID" 2>/dev/null; then
+              kill -TERM "$APP_PID" 2>/dev/null || true
+              wait "$APP_PID" 2>/dev/null || true
+            fi
           }
 
           trap cleanup EXIT
 
+          echo "Waiting for Platform Pulse..."
+
           for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:3000/health > /dev/null; then
+            if curl --fail --silent \
+              http://127.0.0.1:3000/health > /dev/null; then
+              echo "Platform Pulse is responding."
               break
             fi
 
             if [ "$attempt" -eq 20 ]; then
-              echo "Platform Pulse did not become healthy."
+              echo "Application did not become healthy."
               cat platform-pulse.log
               exit 1
             fi
@@ -84,32 +91,53 @@ jobs:
             sleep 1
           done
 
-          HEALTH_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/health)
-          READY_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/ready)
-          INFO_RESPONSE=$(curl --fail --silent http://127.0.0.1:3000/api/info)
+          HEALTH_RESPONSE="$(
+            curl --fail --silent \
+              http://127.0.0.1:3000/health
+          )"
 
-          echo "$HEALTH_RESPONSE" | grep --quiet '"status":"healthy"'
-          echo "$READY_RESPONSE" | grep --quiet '"status":"ready"'
-          echo "$INFO_RESPONSE" | grep --quiet '"service":"aws-devops-platform"'
+          READY_RESPONSE="$(
+            curl --fail --silent \
+              http://127.0.0.1:3000/ready
+          )"
 
-          kill "$APP_PID" 2>/dev/null || true
-          wait "$APP_PID" || true       
+          INFO_RESPONSE="$(
+            curl --fail --silent \
+              http://127.0.0.1:3000/api/info
+          )"
+
+          grep --quiet '"status":"healthy"' <<< "$HEALTH_RESPONSE"
+          grep --quiet '"status":"ready"' <<< "$READY_RESPONSE"
+          grep --quiet '"service":"aws-devops-platform"' <<< "$INFO_RESPONSE"
+
+          echo "All endpoint tests passed."
+
+          kill -TERM "$APP_PID"
+          wait "$APP_PID"
 
           trap - EXIT
 
-          grep --quiet '"event":"shutdown_complete"' platform-pulse.log
+          if ! grep --quiet \
+            '"event":"shutdown_complete"' \
+            platform-pulse.log; then
+            echo "Graceful shutdown was not confirmed."
+            cat platform-pulse.log
+            exit 1
+          fi
 
-          echo "Platform Pulse endpoint tests passed."
+          echo "Graceful shutdown passed."
 
   publish:
     name: Build and publish image
     needs:
       - test
 
-if: >-
-  (github.event_name == 'push' ||
-  github.event_name == 'workflow_dispatch') &&
-  github.ref == 'refs/heads/main'
+    if: >-
+      ${{
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch'
+      }}
+
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -119,10 +147,10 @@ if: >-
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure temporary AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           role-session-name: platform-pulse-${{ github.run_id }}
@@ -130,7 +158,7 @@ if: >-
           allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
           mask-aws-account-id: true
 
-      - name: Confirm assumed AWS identity
+      - name: Confirm AWS identity
         run: aws sts get-caller-identity
 
       - name: Log in to Amazon ECR
@@ -147,15 +175,15 @@ if: >-
           file: ./docker/Dockerfile
           platforms: linux/amd64
           push: true
-
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-
           labels: |
             org.opencontainers.image.title=Platform Pulse
-            org.opencontainers.image.description=AWS DevOps Platform operations dashboard
+            org.opencontainers.image.description=AWS DevOps Platform dashboard
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Add image to workflow summary
         shell: bash
