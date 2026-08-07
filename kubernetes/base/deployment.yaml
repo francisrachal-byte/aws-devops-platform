@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-pulse
+  namespace: platform-pulse
+  labels:
+    app.kubernetes.io/name: platform-pulse
+    app.kubernetes.io/part-of: aws-devops-platform
+spec:
+  replicas: 2
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-pulse
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-pulse
+        app.kubernetes.io/part-of: aws-devops-platform
+        environment: dev
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: platform-pulse
+          image: 856898221075.dkr.ecr.us-east-1.amazonaws.com/aws-devops-platform-dev:bootstrap
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            - name: PORT
+              value: "3000"
+
+            - name: NODE_ENV
+              value: production
+
+            - name: SERVICE_NAME
+              value: aws-devops-platform
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+
+      volumes:
+        - name: temporary-files
+          emptyDir: {}
